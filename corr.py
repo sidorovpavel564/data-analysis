@@ -1,10 +1,17 @@
-import mimetypes
-import pandas as pd
-from scipy import stats
 import json
+import mimetypes
+
+import pandas as pd
+import numpy as np
+from scipy import stats
 
 
-def filename_extension_is_csv(file_path):
+def filename_extension_is_csv(file_path: str) -> bool:
+    """
+    Checks that the filename extension is ".csv".
+    :param str file_path: File path. Example: 'data.csv'.
+    :return: True if filename extension is ".csv". False otherwise.
+    """
     mimestart = mimetypes.guess_type(file_path)[0]
     if mimestart != None:
         mimestart = mimestart.split("/")[1]
@@ -13,7 +20,64 @@ def filename_extension_is_csv(file_path):
     return False
 
 
-def perform_correlation_analysis(csv_file_path, output_file):
+def check_dataframe_types(df: pd.DataFrame) -> list:
+    """
+    Receives pandas.DataFrame and forms list of columns that are not int or 
+    float type.
+    :param pd.DataFrame df: Dataset in pd.DataFrame format.
+    :return: List of columns that are not int or float type.
+    """
+    allowed_types = [int, float]
+    invalid_columns = []
+
+    for column in df.columns:
+        column_type = df[column].dtype
+        if column_type not in allowed_types:
+            invalid_columns.append(column)
+    return invalid_columns
+
+
+def get_outliers_percentage(df: pd.DataFrame) -> float:
+    """
+    Receives pandas.DataFrame, calculates IQR and returns percentage of columns 
+    with outliers.
+    :param pd.DataFrame df: Dataset in pd.DataFrame format.
+    :return: Percentage of columns with outliers.
+    """
+    num_columns = df.shape[1]
+    num_columns_with_outliers = 0
+
+    # Calculate the IQR for each column
+    for column in df.columns:
+        data = df[column]
+        Q1 = np.percentile(data, 25)
+        Q3 = np.percentile(data, 75)
+        IQR = Q3 - Q1
+
+        # Define outliers using the 1.5*IQR criterion
+        outliers = (data < Q1 - 1.5 * IQR) | (data > Q3 + 1.5 * IQR)
+
+        if outliers.any():
+            num_columns_with_outliers += 1
+
+    percentage = (num_columns_with_outliers / num_columns) * 100
+
+    return percentage
+
+
+def perform_correlation_analysis(csv_file_path: str, output_file: str, dropna: bool = True) -> None:
+    """
+    Creates pd.DataFrame from open csv-file, removes missing values if dropna=True, checks 
+    that the data are numeric, checks data normal distribution, checks outliers, 
+    defines correlation method, calculates correlation matrix and writes results 
+    to json-file.
+    :param str csv_file_path: Dataset filepath. The filename extension should 
+    be "csv".
+    :param str output_file: Result filepath. The filename extension should be 
+    "json".
+    :param bool dropna: Remove missing values if True. Default True.
+    :returns: None
+    """
     if filename_extension_is_csv(csv_file_path):
         # Read the CSV file into a Pandas DataFrame
         data = pd.read_csv(csv_file_path)
@@ -22,9 +86,9 @@ def perform_correlation_analysis(csv_file_path, output_file):
         data.dropna(inplace=True)
 
         # Check variables types
-        data_is_numeric = all(data.dtypes.apply(lambda x: x in [int, float]))
+        invalid_columns = check_dataframe_types(data)
 
-        if data_is_numeric:
+        if len(invalid_columns) == 0:
 
             # Check data normal distribution and define corr method
             alpha = 1e-3
@@ -35,14 +99,21 @@ def perform_correlation_analysis(csv_file_path, output_file):
             if count / len(p_values) > threshold:
                 corr_method = 'kendall'
 
+            # Check outliers
+            outliers_percentage = get_outliers_percentage(data)
+            if outliers_percentage > 85:
+                corr_method = 'kendall'
+
             # Perform correlation analysis
             correlation_matrix = data.corr(method=corr_method)
 
             # Convert the correlation matrix to a dictionary
             correlation_dict = correlation_matrix.to_dict()
 
+            # Form json output
             json_data = {
                 'corr_method': corr_method,
+                'percentage_of_columns_with_outliers': outliers_percentage,
                 'corr_mtx': correlation_dict,
             }
 
@@ -51,7 +122,8 @@ def perform_correlation_analysis(csv_file_path, output_file):
                 json.dump(json_data, f)
         else:
             json_data = {
-                'error': 'Data has non-numeric columns'
+                'error': 'Data has non-numeric columns',
+                'columns': invalid_columns
             }
         with open(output_file, 'w') as f:
             json.dump(json_data, f)
@@ -64,4 +136,4 @@ def perform_correlation_analysis(csv_file_path, output_file):
 
 
 if __name__ == '__main__':
-    perform_correlation_analysis('test_data.csv', 'results.json')
+    perform_correlation_analysis('test_data.csv', 'test_results.json')

@@ -1,3 +1,5 @@
+import numpy as np
+from scipy import stats
 import pandas as pd
 from factor_analyzer import FactorAnalyzer
 import matplotlib.pyplot as plt
@@ -5,13 +7,11 @@ import seaborn as sns
 import matplotlib as mpl
 mpl.rcParams['figure.dpi'] = 300
 
-from scipy import stats
-import numpy as np
 
-
-data = pd.read_csv('PerfIndicators_RusUniversities_01012018/data.csv', delimiter=';')
+data = pd.read_csv(
+    'PerfIndicators_RusUniversities_01012018/data.csv', delimiter=';')
 data.drop(['federal_district', 'federal_district_short', 'region_code',
-       'region_name', 'okato', 'id', 'name', 'name_short', 'year'], axis=1, inplace=True)
+           'region_name', 'okato', 'id', 'name', 'name_short', 'year'], axis=1, inplace=True)
 data.dropna(inplace=True)
 
 # sns.histplot(data=data['e8'])
@@ -37,24 +37,28 @@ data.dropna(inplace=True)
 #     corr_method = 'kendall'
 # print(corr_method)
 
-# Calculate the IQR for each column
-q1 = data.quantile(0.25)
-q3 = data.quantile(0.75)
-iqr = q3 - q1
 
-# Set a threshold for outlier detection (e.g., IQR multiplied by 1.5)
-iqr_threshold = 1.5
+def has_outliers(df):
+    num_columns = df.shape[1]
+    num_columns_with_outliers = 0
 
-# Identify outliers using IQR
-outliers = ((data < (q1 - iqr_threshold * iqr)) | (data > (q3 + iqr_threshold * iqr)))
+    for column in df.columns:
+        data = df[column]
+        Q1 = np.percentile(data, 25)
+        Q3 = np.percentile(data, 75)
+        IQR = Q3 - Q1
 
-# Print the outliers
-outliers_columns = outliers.any()
-if outliers_columns.any():
-    print("Outliers (IQR):")
-    for col in outliers_columns.index:
-        col_outliers = data.loc[outliers[col], col]
-        print(f"Outliers in column {col}:")
-        print(col_outliers)
-else:
-    print("No outliers (IQR)")
+        # Define outliers using the 1.5*IQR criterion
+        outliers = (data < Q1 - 1.5 * IQR) | (data > Q3 + 1.5 * IQR)
+
+        if outliers.any():
+            num_columns_with_outliers += 1
+
+    percentage = (num_columns_with_outliers / num_columns) * 100
+
+    return percentage, percentage > 85
+
+
+# print(has_outliers(data))
+
+data.info()

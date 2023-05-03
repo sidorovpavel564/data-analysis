@@ -1,5 +1,6 @@
 {
     "corr_method": "kendall",
+    "percentage_of_columns_with_outliers": 100.0,
     "corr_mtx": {
         "e1": {
             "e1": 1.0,
