@@ -1,8 +1,10 @@
 import json
 import mimetypes
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from factor_analyzer.factor_analyzer import (calculate_bartlett_sphericity,
+                                             calculate_kmo)
 from scipy import stats
 
 
@@ -104,6 +106,14 @@ def perform_correlation_analysis(csv_file_path: str, output_file: str, dropna: b
             if outliers_percentage > 85:
                 corr_method = 'kendall'
 
+            # Perform Bartlett's test
+            chi_square_value, p_value = calculate_bartlett_sphericity(data)
+            bartletts_test = {'chi_square_value': chi_square_value, 'p_value': p_value}
+
+            # Perform Kaiser–Meyer–Olkin (KMO) test
+            kmo_all, kmo_model=calculate_kmo(data)
+            kmo_test = {'kmo_all': list(kmo_all), 'kmo_model': kmo_model}
+
             # Perform correlation analysis
             correlation_matrix = data.corr(method=corr_method)
 
@@ -114,7 +124,9 @@ def perform_correlation_analysis(csv_file_path: str, output_file: str, dropna: b
             json_data = {
                 'corr_method': corr_method,
                 'percentage_of_columns_with_outliers': outliers_percentage,
-                'corr_mtx': correlation_dict,
+                'bartletts_test': bartletts_test,
+                'kmo_test': kmo_test,
+                'corr_mtx': correlation_dict
             }
 
             # Save the results to a JSON file
@@ -136,4 +148,4 @@ def perform_correlation_analysis(csv_file_path: str, output_file: str, dropna: b
 
 
 if __name__ == '__main__':
-    perform_correlation_analysis('test_data.csv', 'test_results.json')
+    perform_correlation_analysis('test_data.csv', 'corr_results.json')
